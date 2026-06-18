@@ -3,10 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multi-Viewer — HTML, Mermaid, PlantUML & BPMN</title>
+    <title>Multi-Viewer — HTML, Markdown, Mermaid, PlantUML & BPMN</title>
 
     <!-- Mermaid -->
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+
+    <!-- Marked (Markdown renderer) -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@11/marked.min.js"></script>
     <!-- PlantUML Encoder -->
     <script src="https://cdn.jsdelivr.net/npm/plantuml-encoder@1.4.0/dist/plantuml-encoder.min.js"></script>
     <!-- bpmn.io -->
@@ -224,11 +227,65 @@
         @media (max-width: 1200px) {
             .html-container, .diagram-container { grid-template-columns: 1fr; }
         }
+    
+        /* Markdown Preview Styles */
+        .md-preview {
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            line-height: 1.6;
+            color: #24292f;
+            overflow: auto;
+            height: 400px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            background: white;
+        }
+        .md-preview h1, .md-preview h2, .md-preview h3 { color: #1a1a2e; margin-top: 20px; }
+        .md-preview h1 { font-size: 1.8em; border-bottom: 2px solid #667eea; padding-bottom: 8px; }
+        .md-preview h2 { font-size: 1.4em; border-bottom: 1px solid #e0e0e0; padding-bottom: 6px; }
+        .md-preview h3 { font-size: 1.2em; }
+        .md-preview code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        .md-preview pre {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 16px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 0.9em;
+        }
+        .md-preview pre code { background: none; padding: 0; color: inherit; }
+        .md-preview table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 15px 0;
+        }
+        .md-preview th, .md-preview td {
+            border: 1px solid #d0d7de;
+            padding: 8px 12px;
+            text-align: left;
+        }
+        .md-preview th { background: #f6f8fa; font-weight: 600; }
+        .md-preview blockquote {
+            border-left: 4px solid #667eea;
+            padding: 8px 16px;
+            color: #57606a;
+            margin: 15px 0;
+        }
+        .md-preview ul, .md-preview ol { padding-left: 24px; margin: 10px 0; }
+        .md-preview a { color: #667eea; }
+        .md-preview img { max-width: 100%; height: auto; border-radius: 6px; }
+
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🛠️ HTML, Diagram & BPMN Viewer Tool</h1>
+        <h1>🛠️ HTML, Markdown, Diagram & BPMN Viewer Tool</h1>
 
         <!-- ================================================================
         HTML EDITOR & PREVIEW
@@ -275,6 +332,71 @@
                 <button class="btn" onclick="loadHTMLSample()">📋 Beispiel</button>
             </div>
             <div id="htmlMessage" class="success-message"></div>
+        </div>
+
+
+        <!-- ================================================================
+        MARKDOWN EDITOR & PREVIEW
+        ================================================================ -->
+        <div class="section">
+            <h2 class="section-title">
+                <span>📝 Markdown Editor & Preview</span>
+                <div class="export-options">
+                    <button class="btn export-btn" onclick="exportMarkdown()">💾 Export .md</button>
+                    <button class="btn export-btn" onclick="exportMarkdownHTML()">🌐 Export .html</button>
+                </div>
+            </h2>
+            <div class="html-container">
+                <div class="editor-wrapper">
+                    <div class="label editor">Markdown Editor</div>
+                    <textarea id="mdEditor" spellcheck="false"># Willkommen beim Markdown-Viewer!
+
+## Text-Formatierung
+**Fett**, *kursiv*, ~~durchgestrichen~~, `inline code`
+
+## Listen
+- Punkt 1
+- Punkt 2
+  - Unterpunkt
+
+1. Erster
+2. Zweiter
+
+## Code-Blöcke
+```python
+def greet(name):
+    return f"Hallo, {name}!"
+```
+
+## Tabellen
+| Spalte A | Spalte B |
+|----------|----------|
+| Wert 1   | Wert 2   |
+| Wert 3   | Wert 4   |
+
+## Zitate
+> Dies ist ein Blockzitat.
+
+## Links
+[GitHub](https://github.com)
+
+**Probiere es aus!** ✨</textarea>
+                </div>
+                <div class="preview-wrapper">
+                    <div class="label preview">Markdown Vorschau</div>
+                    <div id="mdPreview" class="md-preview"><p style="color:#888;">Wird geladen...</p></div>
+                </div>
+            </div>
+            <div style="margin-top:15px; padding:10px; background:#f5f5f5; border-radius:8px;">
+                <input type="checkbox" id="mdAutoUpdate" checked>
+                <label for="mdAutoUpdate">Automatische Vorschau-Aktualisierung</label>
+            </div>
+            <div class="btn-group">
+                <button class="btn" onclick="renderMarkdown()">📝 Rendern</button>
+                <button class="btn" onclick="clearMarkdown()">🗑️ Leeren</button>
+                <button class="btn" onclick="loadMdSample()">📋 Beispiel</button>
+            </div>
+            <div id="mdMessage" class="success-message"></div>
         </div>
 
         <!-- ================================================================
@@ -471,6 +593,60 @@ User --> Order : places
 
     htmlEditor.addEventListener('input', function() {
         if (autoUpdate.checked) updatePreview();
+    });
+
+
+    /* ── Markdown Viewer ──────────────────────────────────────────── */
+    var mdEditor = document.getElementById('mdEditor');
+    var mdPreview = document.getElementById('mdPreview');
+    var mdAutoUpdate = document.getElementById('mdAutoUpdate');
+    var mdMessage = document.getElementById('mdMessage');
+    var mdSampleText = mdEditor.value;
+
+    function renderMarkdown() {
+        var code = mdEditor.value.trim();
+        if (!code) { mdPreview.innerHTML = '<p style="color:#888;">(leer)</p>'; return; }
+        try {
+            if (typeof marked === 'undefined') {
+                mdPreview.innerHTML = '<p style="color:#f44336;">marked.js nicht geladen. Internetverbindung prüfen.</p>';
+                return;
+            }
+            marked.setOptions({ breaks: true, gfm: true });
+            mdPreview.innerHTML = marked.parse(code);
+            showMdMessage('Markdown gerendert', 'success');
+        } catch (e) {
+            mdPreview.innerHTML = '<p style="color:#f44336;">Render-Fehler</p>';
+            showMdMessage(e.message, 'error');
+        }
+    }
+
+    function showMdMessage(msg, type) {
+        mdMessage.textContent = type === 'error' ? '❌ ' + msg : '✅ ' + msg;
+        mdMessage.className = type === 'error' ? 'error-message' : 'success-message';
+        mdMessage.style.display = 'block';
+        setTimeout(function() { mdMessage.style.display = 'none'; }, 3000);
+    }
+
+    function clearMarkdown() { mdEditor.value = ''; mdPreview.innerHTML = ''; }
+    function loadMdSample() { mdEditor.value = mdSampleText; renderMarkdown(); }
+
+    function exportMarkdown() {
+        downloadBlob(new Blob([mdEditor.value], { type: 'text/markdown' }), 'dokument.md');
+        showMdMessage('Exportiert als .md', 'success');
+    }
+
+    function exportMarkdownHTML() {
+        if (typeof marked === 'undefined') { showMdMessage('marked.js nicht geladen', 'error'); return; }
+        try {
+            var body = marked.parse(mdEditor.value.trim() || ' ');
+            var full = '<!DOCTYPE html>\n<html lang="de">\n<head>\n<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width, initial-scale=1.0">\n<title>Markdown Export</title>\n<style>\nbody{font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;max-width:900px;margin:40px auto;padding:20px;line-height:1.6;color:#24292f;}pre{background:#1e293b;color:#e2e8f0;padding:16px;border-radius:8px;overflow-x:auto;}code{background:#f4f4f4;padding:2px 6px;border-radius:4px;}table{border-collapse:collapse;width:100%;}th,td{border:1px solid #d0d7de;padding:8px 12px;}th{background:#f6f8fa;}blockquote{border-left:4px solid #667eea;padding:8px 16px;color:#57606a;}\n</style>\n</head>\n<body>\n' + body + '\n</body>\n</html>';
+            downloadBlob(new Blob([full], { type: 'text/html' }), 'dokument.html');
+            showMdMessage('Exportiert als HTML', 'success');
+        } catch (e) { showMdMessage('Export fehlgeschlagen: ' + e.message, 'error'); }
+    }
+
+    mdEditor.addEventListener('input', function() {
+        if (mdAutoUpdate.checked) renderMarkdown();
     });
 
     /* ── Mermaid Viewer ───────────────────────────────────────────── */
@@ -871,6 +1047,7 @@ User --> Order : places
     /* ── Auto-Render bei Start ─────────────────────────────────────── */
     window.addEventListener('DOMContentLoaded', function() {
         updatePreview();
+        renderMarkdown();
         renderMermaid();
         renderUML();
         bpmnInit();
