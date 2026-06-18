@@ -116,7 +116,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin: -25px -25px 20px -25px;
+            margin: 0 0 20px 0; border-radius: 10px 10px 0 0;
         }
         #bpmn-header h2 { font-size: 1.2em; margin: 0; }
         #bpmn-toolbar {
@@ -224,6 +224,48 @@
         .bpmn-toast.info { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }
         #bpmn-file-input { display: none; }
 
+
+        /* Tab Navigation */
+        .tab-nav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-bottom: 20px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 12px;
+            padding: 6px;
+            backdrop-filter: blur(10px);
+            position: sticky;
+            top: 10px;
+            z-index: 100;
+        }
+        .tab-btn {
+            flex: 1;
+            min-width: 120px;
+            padding: 12px 16px;
+            border: none;
+            border-radius: 8px;
+            background: transparent;
+            color: rgba(255,255,255,0.8);
+            font-size: 0.9em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .tab-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
+        .tab-btn.active {
+            background: white;
+            color: #667eea;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+        @media (max-width: 700px) {
+            .tab-nav { flex-direction: column; }
+            .tab-btn { text-align: left; }
+        }
+
         @media (max-width: 1200px) {
             .html-container, .diagram-container { grid-template-columns: 1fr; }
         }
@@ -285,9 +327,18 @@
 </head>
 <body>
     <div class="container">
-        <h1>🛠️ HTML, Markdown, Diagram & BPMN Viewer Tool</h1>
+        <h1>🛠️ Multi-Viewer</h1>
+<div class="tab-nav">
+            <button class="tab-btn active" data-tab="html" onclick="switchTab('html')">📝 HTML</button>
+            <button class="tab-btn" data-tab="markdown" onclick="switchTab('markdown')">📝 Markdown</button>
+            <button class="tab-btn" data-tab="mermaid" onclick="switchTab('mermaid')">📊 Mermaid</button>
+            <button class="tab-btn" data-tab="plantuml" onclick="switchTab('plantuml')">🔷 PlantUML</button>
+            <button class="tab-btn" data-tab="bpmn" onclick="switchTab('bpmn')">📊 BPMN</button>
+        </div>
 
-        <!-- ================================================================
+
+        <div id="tab-html" class="tab-panel active">
+<!-- ================================================================
         HTML EDITOR & PREVIEW
         ================================================================ -->
         <div class="section">
@@ -333,9 +384,12 @@
             </div>
             <div id="htmlMessage" class="success-message"></div>
         </div>
+</div>
 
 
-        <!-- ================================================================
+
+        <div id="tab-markdown" class="tab-panel">
+<!-- ================================================================
         MARKDOWN EDITOR & PREVIEW
         ================================================================ -->
         <div class="section">
@@ -398,8 +452,11 @@ def greet(name):
             </div>
             <div id="mdMessage" class="success-message"></div>
         </div>
+</div>
 
-        <!-- ================================================================
+
+        <div id="tab-mermaid" class="tab-panel">
+<!-- ================================================================
         MERMAID VIEWER
         ================================================================ -->
         <div class="section">
@@ -432,8 +489,11 @@ def greet(name):
             <div id="mermaidError" class="error-message"></div>
             <div id="mermaidSuccess" class="success-message"></div>
         </div>
+</div>
 
-        <!-- ================================================================
+
+        <div id="tab-plantuml" class="tab-panel">
+<!-- ================================================================
         PLANTUML VIEWER
         ================================================================ -->
         <div class="section">
@@ -471,8 +531,11 @@ User --> Order : places
             <div id="umlError" class="error-message"></div>
             <div id="umlSuccess" class="success-message"></div>
         </div>
+</div>
 
-        <!-- ================================================================
+
+        <div id="tab-bpmn" class="tab-panel">
+<!-- ================================================================
         BPMN EDITOR
         ================================================================ -->
         <div class="section" style="padding: 0; overflow: hidden;">
@@ -533,11 +596,36 @@ User --> Order : places
     </div>
 
     <input type="file" id="bpmn-file-input" accept=".bpmn,.xml" style="display:none;">
+</div>
+
 
     <!-- ================================================================
     JAVASCRIPT
     ================================================================ -->
     <script>
+
+    /* ── Tab Navigation ──────────────────────────────────────────── */
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+        document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
+        var btn = document.querySelector('[data-tab="' + tabId + '"]');
+        var panel = document.getElementById('tab-' + tabId);
+        if (btn) btn.classList.add('active');
+        if (panel) {
+            panel.classList.add('active');
+            // Trigger re-render for diagrams when switching to their tab
+            if (tabId === 'mermaid') {
+                var mo = document.getElementById('mermaidOutput');
+                if (mo && !mo.querySelector('svg')) renderMermaid();
+            }
+            if (tabId === 'plantuml') {
+                var uo = document.getElementById('umlOutput');
+                if (uo && !uo.querySelector('img')) renderUML();
+            }
+            if (tabId === 'bpmn' && !window._bpmnTabVisited) { window._bpmnTabVisited = true; bpmnInit(); }
+        }
+    }
+
     /* ── Mermaid Initialisierung ──────────────────────────────────── */
     mermaid.initialize({
         startOnLoad: false,
@@ -1048,9 +1136,7 @@ User --> Order : places
     window.addEventListener('DOMContentLoaded', function() {
         updatePreview();
         renderMarkdown();
-        renderMermaid();
-        renderUML();
-        bpmnInit();
+        switchTab('html');
     });
     </script>
 </body>
