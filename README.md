@@ -23,5 +23,5 @@
 ### Markdown Features
 - GitHub Flavored Markdown (GFM) with tables, task lists, code blocks
 - Live preview with auto-update
-- Export as `.md` or standalone `.html`
+- Export as `.md`, standalone `.html`, or **Word `.doc`** (opens in Word, LibreOffice, Google Docs)
 - Syntax highlighting in code blocks (browser-native)

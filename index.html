@@ -398,6 +398,7 @@
                 <div class="export-options">
                     <button class="btn export-btn" onclick="exportMarkdown()">💾 Export .md</button>
                     <button class="btn export-btn" onclick="exportMarkdownHTML()">🌐 Export .html</button>
+                    <button class="btn export-btn" onclick="exportMarkdownDOCX()">📄 Export .doc</button>
                 </div>
             </h2>
             <div class="html-container">
@@ -731,6 +732,18 @@ User --> Order : places
             downloadBlob(new Blob([full], { type: 'text/html' }), 'dokument.html');
             showMdMessage('Exportiert als HTML', 'success');
         } catch (e) { showMdMessage('Export fehlgeschlagen: ' + e.message, 'error'); }
+    }
+
+    function exportMarkdownDOCX() {
+        var mdContent = mdEditor.value.trim();
+        if (!mdContent) { showMdMessage('Kein Inhalt zum Exportieren', 'error'); return; }
+        if (typeof marked === 'undefined') { showMdMessage('marked.js nicht geladen', 'error'); return; }
+        try {
+            var body = marked.parse(mdContent);
+            var wordHTML = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="UTF-8"><title>Markdown Export</title><!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]--><style>body{font-family:Calibri,Arial,sans-serif;font-size:12pt;line-height:1.4;color:#333;margin:30pt;}h1{font-size:20pt;margin-top:18pt;}h2{font-size:16pt;margin-top:14pt;}h3{font-size:13pt;margin-top:12pt;}pre{background:#f0f0f0;padding:8pt;font-family:Consolas,monospace;font-size:10pt;border:1pt solid #ddd;}code{background:#f0f0f0;padding:1pt 4pt;font-family:Consolas,monospace;font-size:10pt;}table{border-collapse:collapse;width:100%;margin:10pt 0;}th,td{border:1pt solid #999;padding:4pt 8pt;text-align:left;}th{background:#e0e0e0;font-weight:bold;}blockquote{border-left:3pt solid #999;padding-left:12pt;color:#555;margin:10pt 0;}p{margin:6pt 0;}</style></head><body>' + body + '</body></html>';
+            downloadBlob(new Blob([wordHTML], { type: 'application/msword' }), 'dokument.doc');
+            showMdMessage('✅ Exportiert als Word (.doc)', 'success');
+        } catch (e) { showMdMessage('❌ Export fehlgeschlagen: ' + e.message, 'error'); }
     }
 
     mdEditor.addEventListener('input', function() {
