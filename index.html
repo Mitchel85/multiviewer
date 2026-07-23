@@ -329,15 +329,15 @@
     <div class="container">
         <h1>🛠️ Multi-Viewer</h1>
 <div class="tab-nav">
-            <button class="tab-btn active" data-tab="html" onclick="switchTab('html')">📝 HTML</button>
-            <button class="tab-btn" data-tab="markdown" onclick="switchTab('markdown')">📝 Markdown</button>
+            <button class="tab-btn active" data-tab="markdown" onclick="switchTab('markdown')">📝 Markdown</button>
             <button class="tab-btn" data-tab="mermaid" onclick="switchTab('mermaid')">📊 Mermaid</button>
             <button class="tab-btn" data-tab="plantuml" onclick="switchTab('plantuml')">🔷 PlantUML</button>
             <button class="tab-btn" data-tab="bpmn" onclick="switchTab('bpmn')">📊 BPMN</button>
+            <button class="tab-btn" data-tab="html" onclick="switchTab('html')">📝 HTML</button>
         </div>
 
 
-        <div id="tab-html" class="tab-panel active">
+        <div id="tab-html" class="tab-panel">
 <!-- ================================================================
         HTML EDITOR & PREVIEW
         ================================================================ -->
@@ -388,7 +388,7 @@
 
 
 
-        <div id="tab-markdown" class="tab-panel">
+        <div id="tab-markdown" class="tab-panel active">
 <!-- ================================================================
         MARKDOWN EDITOR & PREVIEW
         ================================================================ -->
@@ -769,7 +769,27 @@ User --> Order : places
             showMermaidMsg('✅ Mermaid-Diagramm gerendert', 'success');
         } catch (e) {
             mermaidOutput.innerHTML = '<p style="color:#f44336;">❌ Syntax-Fehler</p>';
-            showMermaidMsg('❌ ' + e.message, 'error');
+            
+            // Parse error message to find line number
+            var errorMsg = e.message || String(e);
+            var lineMatch = errorMsg.match(/line\s+(\d+)/i) || errorMsg.match(/at line (\d+)/i);
+            var lineNum = lineMatch ? lineMatch[1] : null;
+            
+            var displayMsg = '❌ Mermaid-Fehler';
+            if (lineNum) {
+                displayMsg += ' in Zeile ' + lineNum;
+                // Try to show the problematic line
+                var lines = code.split('\n');
+                var lineIdx = parseInt(lineNum) - 1;
+                if (lineIdx >= 0 && lineIdx < lines.length) {
+                    var badLine = lines[lineIdx].trim();
+                    if (badLine.length > 40) badLine = badLine.substring(0, 40) + '...';
+                    displayMsg += ': "' + badLine + '"';
+                }
+            } else {
+                displayMsg += ': ' + errorMsg.substring(0, 80);
+            }
+            showMermaidMsg(displayMsg, 'error');
             console.error('[Mermaid] Render-Fehler:', e);
         }
     }
