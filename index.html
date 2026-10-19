@@ -226,6 +226,16 @@
 
 
         /* Tab Navigation */
+        .cdn-warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 0.95em;
+            line-height: 1.5;
+        }
         .tab-nav {
             display: flex;
             flex-wrap: wrap;
@@ -328,6 +338,7 @@
 <body>
     <div class="container">
         <h1>🛠️ Multi-Viewer</h1>
+        <div id="cdnWarning" class="cdn-warning" style="display:none;"></div>
 <div class="tab-nav">
             <button class="tab-btn active" data-tab="markdown" onclick="switchTab('markdown')">📝 Markdown</button>
             <button class="tab-btn" data-tab="mermaid" onclick="switchTab('mermaid')">📊 Mermaid</button>
@@ -628,11 +639,17 @@ User --> Order : places
     }
 
     /* ── Mermaid Initialisierung ──────────────────────────────────── */
-    mermaid.initialize({
-        startOnLoad: false,
-        theme: 'default',
-        securityLevel: 'loose'
-    });
+    if (typeof mermaid !== 'undefined') {
+        try {
+            mermaid.initialize({
+                startOnLoad: false,
+                theme: 'default',
+                securityLevel: 'loose'
+            });
+        } catch (e) {
+            console.error('[Mermaid] initialize fehlgeschlagen:', e);
+        }
+    }
 
     /* ── HTML Editor ──────────────────────────────────────────────── */
     var htmlEditor = document.getElementById('htmlEditor');
@@ -762,8 +779,12 @@ User --> Order : places
             showMermaidMsg('Bitte Mermaid-Code eingeben.', 'error');
             return;
         }
+        if (typeof mermaid === 'undefined') {
+            showMermaidMsg('❌ Mermaid nicht geladen — Internetverbindung prüfen.', 'error');
+            return;
+        }
+        var id = 'mermaid-' + Date.now();
         try {
-            var id = 'mermaid-' + Date.now();
             var { svg } = await mermaid.render(id, code);
             mermaidOutput.innerHTML = svg;
             showMermaidMsg('✅ Mermaid-Diagramm gerendert', 'success');
@@ -791,6 +812,10 @@ User --> Order : places
             }
             showMermaidMsg(displayMsg, 'error');
             console.error('[Mermaid] Render-Fehler:', e);
+        } finally {
+            // Temporäre Fehler-SVG von mermaid.render() aufräumen
+            var errNode = document.getElementById('d' + id);
+            if (errNode) errNode.remove();
         }
     }
 
@@ -819,17 +844,47 @@ User --> Order : places
     var umlError = document.getElementById('umlError');
     var umlSuccess = document.getElementById('umlSuccess');
 
-    function renderUML() {
+    async function renderUML() {
         var code = umlEditor.value.trim();
         if (!code) { showUMLMsg('Bitte PlantUML-Code eingeben.', 'error'); return; }
+        if (typeof plantumlEncoder === 'undefined') {
+            umlOutput.innerHTML = '<p style="color:#f44336;">❌ PlantUML-Encoder nicht geladen — Internetverbindung prüfen.</p>';
+            showUMLMsg('❌ Encoder nicht geladen', 'error');
+            return;
+        }
+        var encoded;
         try {
-            var encoded = plantumlEncoder.encode(code);
-            var url = 'https://www.plantuml.com/plantuml/svg/' + encoded;
-            umlOutput.innerHTML = '<img src="' + url + '" alt="PlantUML Diagram" style="max-width:100%;height:auto;" onerror="this.parentElement.innerHTML=\'<p style=color:#f44336;>❌ PlantUML-Rendering fehlgeschlagen</p>\'">';
-            showUMLMsg('✅ PlantUML-Diagramm gerendert', 'success');
+            encoded = plantumlEncoder.encode(code);
         } catch (e) {
             umlOutput.innerHTML = '<p style="color:#f44336;">❌ Fehler beim Encodieren</p>';
             showUMLMsg('❌ ' + e.message, 'error');
+            return;
+        }
+        var url = 'https://www.plantuml.com/plantuml/svg/' + encoded;
+        umlOutput.innerHTML = '<p class="loading">🔄 Wird geladen...</p>';
+        try {
+            var res = await fetch(url);
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            var svgText = await res.text();
+            var blobUrl = URL.createObjectURL(new Blob([svgText], { type: 'image/svg+xml' }));
+            var img = new Image();
+            img.alt = 'PlantUML Diagram';
+            img.style.maxWidth = '100%';
+            img.style.height = 'auto';
+            img.onload = function() {
+                umlOutput.innerHTML = '';
+                umlOutput.appendChild(img);
+                showUMLMsg('✅ PlantUML-Diagramm gerendert', 'success');
+            };
+            img.onerror = function() {
+                URL.revokeObjectURL(blobUrl);
+                umlOutput.innerHTML = '<p style="color:#f44336;">❌ PlantUML-Rendering fehlgeschlagen</p>';
+                showUMLMsg('❌ Rendering fehlgeschlagen', 'error');
+            };
+            img.src = blobUrl;
+        } catch (e) {
+            umlOutput.innerHTML = '<p style="color:#f44336;">❌ PlantUML-Rendering fehlgeschlagen' + (e && e.message ? ' (' + e.message + ')' : '') + '</p>';
+            showUMLMsg('❌ Rendering fehlgeschlagen' + (e && e.message ? ': ' + e.message : ''), 'error');
         }
     }
 
@@ -842,20 +897,28 @@ User --> Order : places
 
     function clearUML() { umlEditor.value = ''; umlOutput.innerHTML = ''; }
 
-    function exportUML(format) {
+    async function exportUML(format) {
         var code = umlEditor.value.trim();
         if (!code) { showUMLMsg('Bitte erst PlantUML-Code eingeben.', 'error'); return; }
+        if (typeof plantumlEncoder === 'undefined') { showUMLMsg('❌ PlantUML-Encoder nicht geladen.', 'error'); return; }
+        var encoded;
         try {
-            var encoded = plantumlEncoder.encode(code);
-            var ext = format === 'svg' ? 'svg' : 'png';
-            var url = 'https://www.plantuml.com/plantuml/' + ext + '/' + encoded;
-            var a = document.createElement('a');
-            a.href = url;
-            a.download = 'plantuml-diagramm.' + ext;
-            a.click();
-            showUMLMsg('✅ PlantUML exportiert als ' + ext.toUpperCase(), 'success');
+            encoded = plantumlEncoder.encode(code);
         } catch (e) {
             showUMLMsg('❌ Export fehlgeschlagen: ' + e.message, 'error');
+            return;
+        }
+        var ext = format === 'svg' ? 'svg' : 'png';
+        var url = 'https://www.plantuml.com/plantuml/' + ext + '/' + encoded;
+        try {
+            // Bild holen, lokal als Blob speichern — die App bleibt geöffnet.
+            var res = await fetch(url);
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            var blob = await res.blob();
+            downloadBlob(blob, 'plantuml-diagramm.' + ext);
+            showUMLMsg('✅ PlantUML exportiert als ' + ext.toUpperCase(), 'success');
+        } catch (e) {
+            showUMLMsg('❌ Export fehlgeschlagen: ' + (e && e.message ? e.message : 'Netzwerkfehler'), 'error');
         }
     }
 
@@ -1166,10 +1229,24 @@ User --> Order : places
     });
 
     /* ── Auto-Render bei Start ─────────────────────────────────────── */
+    function checkCDNLibs() {
+        var missing = [];
+        if (typeof mermaid === 'undefined') missing.push('Mermaid');
+        if (typeof marked === 'undefined') missing.push('Markdown (marked)');
+        if (typeof plantumlEncoder === 'undefined') missing.push('PlantUML (Encoder)');
+        if (typeof BpmnJS === 'undefined') missing.push('BPMN (bpmn-js)');
+        if (missing.length) {
+            var el = document.getElementById('cdnWarning');
+            el.style.display = 'block';
+            el.innerHTML = '⚠️ <strong>Bibliotheken konnten nicht geladen werden:</strong> ' + missing.join(', ') + '. Ohne Internetverbindung (CDN) sind diese Module eingeschränkt — Seite neu laden, sobald die Verbindung steht. HTML-Editor und -Export funktionieren weiterhin.';
+        }
+    }
+
     window.addEventListener('DOMContentLoaded', function() {
+        checkCDNLibs();
         updatePreview();
         renderMarkdown();
-        switchTab('html');
+        switchTab('markdown');
     });
     </script>
 </body>

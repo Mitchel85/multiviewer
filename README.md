@@ -6,9 +6,15 @@
 
 ## Usage
 
-1. Open any `.html`, `.md`, `.mmd`, `.puml`, or `.bpmn` file
-2. Paste the content into the corresponding module
-3. See it rendered live — no server, no install
+1. Open a `.bpmn` (or `.xml`) process file via the BPMN module's **📂 Öffnen** button
+2. For HTML / Markdown / Mermaid / PlantUML: paste the content into the corresponding module
+3. See it rendered live
+
+## Requirements
+
+- **Runs entirely in the browser** — no server, no install. Open `index.html` locally or via GitHub Pages.
+- **Internet connection required at load time:** the rendering libraries (mermaid.js, marked.js, plantuml-encoder, bpmn-js) are loaded from the jsDelivr CDN. Without a connection the HTML editor still works, the other modules show an error message and a visible warning banner.
+- **Privacy:** PlantUML diagrams are rendered by the public server at `plantuml.com` — the PlantUML source code you enter is sent there (encoded in the URL). Mermaid, Markdown, HTML and BPMN stay in your browser.
 
 ## Modules
 
@@ -24,4 +30,3 @@
 - GitHub Flavored Markdown (GFM) with tables, task lists, code blocks
 - Live preview with auto-update
 - Export as `.md`, standalone `.html`, or **Word `.doc`** (opens in Word, LibreOffice, Google Docs)
-- Syntax highlighting in code blocks (browser-native)
