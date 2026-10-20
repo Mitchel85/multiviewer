@@ -6,7 +6,7 @@
     <title>Multi-Viewer — HTML, Markdown, Mermaid, PlantUML & BPMN</title>
 
     <!-- Mermaid -->
-    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.min.js"></script>
 
     <!-- Marked (Markdown renderer) -->
     <script src="https://cdn.jsdelivr.net/npm/marked@11/marked.min.js"></script>
@@ -831,7 +831,8 @@ User --> Order : places
         var svgEl = mermaidOutput.querySelector('svg');
         if (!svgEl) { showMermaidMsg('Bitte erst rendern.', 'error'); return; }
         if (format === 'svg') {
-            var blob = new Blob([svgEl.outerHTML], { type: 'image/svg+xml' });
+            var src = svgSource(svgEl);
+            var blob = new Blob([src.text], { type: 'image/svg+xml;charset=utf-8' });
             downloadBlob(blob, 'mermaid-diagramm.svg');
         } else {
             exportSVGToPNG(svgEl, 'mermaid-diagramm.png');
@@ -866,7 +867,8 @@ User --> Order : places
             var res = await fetch(url);
             if (!res.ok) throw new Error('HTTP ' + res.status);
             var svgText = await res.text();
-            var blobUrl = URL.createObjectURL(new Blob([svgText], { type: 'image/svg+xml' }));
+            // data:-URL statt Blob: Blob-SVGs tainten den Canvas beim PNG-Export
+            var dataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgText)));
             var img = new Image();
             img.alt = 'PlantUML Diagram';
             img.style.maxWidth = '100%';
@@ -877,11 +879,10 @@ User --> Order : places
                 showUMLMsg('✅ PlantUML-Diagramm gerendert', 'success');
             };
             img.onerror = function() {
-                URL.revokeObjectURL(blobUrl);
                 umlOutput.innerHTML = '<p style="color:#f44336;">❌ PlantUML-Rendering fehlgeschlagen</p>';
                 showUMLMsg('❌ Rendering fehlgeschlagen', 'error');
             };
-            img.src = blobUrl;
+            img.src = dataUrl;
         } catch (e) {
             umlOutput.innerHTML = '<p style="color:#f44336;">❌ PlantUML-Rendering fehlgeschlagen' + (e && e.message ? ' (' + e.message + ')' : '') + '</p>';
             showUMLMsg('❌ Rendering fehlgeschlagen' + (e && e.message ? ': ' + e.message : ''), 'error');
@@ -1027,27 +1028,99 @@ User --> Order : places
         URL.revokeObjectURL(url);
     }
 
-    function exportSVGToPNG(svgEl, filename) {
-        var svgData = new XMLSerializer().serializeToString(svgEl);
-        var svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-        var url = URL.createObjectURL(svgBlob);
+    /* SVG -> PNG mit den echten Geometriewerten des Diagramms.
+       img.width/height sind bei SVG-Bildern 0 (bzw. die CSS-Breite) —
+       deshalb werden width/height/viewBox direkt aus dem SVG gelesen. */
+    function svgSize(svgEl) {
+        var vb = (svgEl.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
+        var w = 0, h = 0;
+        if (vb.length === 4 && vb[2] > 0 && vb[3] > 0) { w = vb[2]; h = vb[3]; }
+        if (!w) w = parseFloat(svgEl.getAttribute('width')) || 0;
+        if (!h) h = parseFloat(svgEl.getAttribute('height')) || 0;
+        if (!w || !h) {
+            var box = svgEl.getBoundingClientRect();
+            w = w || box.width; h = h || box.height;
+        }
+        return { w: Math.max(1, Math.round(w)), h: Math.max(1, Math.round(h)) };
+    }
+
+    /* Vollständige SVG-Quelle: Namespace, feste Maße, eingebettete Styles.
+       Ohne width/height und xmlns öffnen manche Programme die Datei nicht. */
+    function svgSource(svgEl) {
+        var size = svgSize(svgEl);
+        var clone = svgEl.cloneNode(true);
+        clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+        clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+        clone.setAttribute('width', size.w);
+        clone.setAttribute('height', size.h);
+        clone.style.removeProperty('max-width');
+        clone.style.removeProperty('height');
+        if (!clone.getAttribute('viewBox')) {
+            clone.setAttribute('viewBox', '0 0 ' + size.w + ' ' + size.h);
+        }
+        // Mermaid setzt width="100%" — das ist für eine Datei wertlos
+        clone.setAttribute('preserveAspectRatio', clone.getAttribute('preserveAspectRatio') || 'xMidYMid meet');
+        // Stylesheets des Dokuments in das SVG kopieren — sonst fehlt die Formatierung
+        var css = '';
+        for (var i = 0; i < document.styleSheets.length; i++) {
+            var sheet = document.styleSheets[i];
+            var rules = null;
+            try { rules = sheet.cssRules; } catch (e) { rules = null; }
+            if (!rules) continue;
+            for (var r = 0; r < rules.length; r++) css += rules[r].cssText + '\n';
+        }
+        if (css) {
+            var style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+            style.setAttribute('type', 'text/css');
+            style.appendChild(document.createTextNode(css));
+            clone.insertBefore(style, clone.firstChild);
+        }
+        return { text: new XMLSerializer().serializeToString(clone), size: size };
+    }
+
+    /* Rastert ein SVG über ein Image-Objekt.
+       Ein reines Blob-URL-SVG gilt als cross-origin und "tainted" den Canvas —
+       deshalb läuft der Umweg über eine data:-URL (gleiche Origin). */
+    function rasterizeSvg(src, scale, onDone) {
         var img = new Image();
         img.onload = function() {
-            var canvas = document.createElement('canvas');
-            canvas.width = img.width * 2;
-            canvas.height = img.height * 2;
-            var ctx = canvas.getContext('2d');
-            ctx.scale(2, 2);
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, img.width, img.height);
-            ctx.drawImage(img, 0, 0);
-            URL.revokeObjectURL(url);
-            canvas.toBlob(function(blob) {
-                downloadBlob(blob, filename);
-            }, 'image/png');
+            try {
+                var canvas = document.createElement('canvas');
+                canvas.width = Math.max(1, Math.round(src.size.w * scale));
+                canvas.height = Math.max(1, Math.round(src.size.h * scale));
+                var ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.setTransform(scale, 0, 0, scale, 0, 0);
+                ctx.drawImage(img, 0, 0, src.size.w, src.size.h);
+                canvas.toBlob(function(blob) {
+                    onDone(blob || null, blob ? '' : 'PNG konnte nicht erzeugt werden.');
+                }, 'image/png');
+            } catch (e) {
+                onDone(null, 'PNG-Export fehlgeschlagen: ' + e.message);
+            }
         };
-        img.onerror = function() { URL.revokeObjectURL(url); };
-        img.src = url;
+        img.onerror = function() {
+            onDone(null, 'SVG konnte nicht geladen werden.');
+        };
+        // UTF-8-sicher: base64 über die Bytesequenz, nicht über Zeichen
+        try {
+            img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(src.text)));
+        } catch (e) {
+            img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(src.text);
+        }
+    }
+
+    function exportSVGToPNG(svgEl, filename) {
+        var src = svgSource(svgEl);
+        var errEl = document.getElementById('mermaidError');
+        rasterizeSvg(src, 2, function(blob, err) {
+            if (!blob) {
+                if (errEl) { errEl.textContent = err; errEl.style.display = 'block'; }
+                return;
+            }
+            downloadBlob(blob, filename);
+        });
     }
 
     /* BPMN Aktionen */
@@ -1106,31 +1179,16 @@ User --> Order : places
         bpmnShowLoading('Exportiere PNG...');
         bpmnModeler.saveSVG().then(function(result) {
             var baseName = bpmnCurrentFile ? bpmnCurrentFile.replace(/\.(bpmn|xml)$/i, '') : 'bpmn-diagramm';
-            var svgBlob = new Blob([result.svg], { type: 'image/svg+xml;charset=utf-8' });
-            var url = URL.createObjectURL(svgBlob);
-            var img = new Image();
-            img.onload = function() {
-                var canvas = document.createElement('canvas');
-                canvas.width = img.width * 2;
-                canvas.height = img.height * 2;
-                var ctx = canvas.getContext('2d');
-                ctx.scale(2, 2);
-                ctx.fillStyle = '#ffffff';
-                ctx.fillRect(0, 0, img.width, img.height);
-                ctx.drawImage(img, 0, 0);
-                URL.revokeObjectURL(url);
-                canvas.toBlob(function(blob) {
-                    downloadBlob(blob, baseName + '.png');
-                    bpmnHideLoading();
-                    bpmnSetStatus('✅ PNG exportiert');
-                }, 'image/png');
-            };
-            img.onerror = function() {
-                URL.revokeObjectURL(url);
+            var holder = document.createElement('div');
+            holder.innerHTML = result.svg;
+            var svgEl = holder.querySelector('svg');
+            if (!svgEl) { bpmnHideLoading(); bpmnShowToast('SVG konnte nicht gelesen werden.', 'error'); return; }
+            rasterizeSvg(svgSource(svgEl), 2, function(blob, err) {
                 bpmnHideLoading();
-                bpmnShowToast('PNG-Export fehlgeschlagen', 'error');
-            };
-            img.src = url;
+                if (!blob) { bpmnShowToast('PNG-Export fehlgeschlagen: ' + err, 'error'); return; }
+                downloadBlob(blob, baseName + '.png');
+                bpmnSetStatus('✅ PNG exportiert');
+            });
         }).catch(function(err) {
             bpmnHideLoading();
             bpmnShowToast('PNG-Export fehlgeschlagen: ' + err.message, 'error');
